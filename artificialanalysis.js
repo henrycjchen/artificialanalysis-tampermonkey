@@ -6,6 +6,8 @@
 // @match        https://artificialanalysis.ai/*
 // @run-at       document-idle
 // @grant        none
+// @updateURL    https://raw.githubusercontent.com/henrycjchen/artificialanalysis-tampermonkey/main/artificialanalysis.js
+// @downloadURL  https://raw.githubusercontent.com/henrycjchen/artificialanalysis-tampermonkey/main/artificialanalysis.js
 // ==/UserScript==
 
 (function () {
