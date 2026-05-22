@@ -2,7 +2,7 @@
 // @name         Artificial Analysis - Frontier Chart Controls
 // @namespace    https://artificialanalysis.ai/
 // @version      2.3
-// @description  Frontier chart 的本地控件：时间范围 / Y 轴范围。默认近 3 个月、Y 轴 39~max、图表高度 700px。适配 Recharts 版本。
+// @description  Local controls for the Frontier chart: time range / Y-axis range. Defaults to last 3 months, Y-axis 39~max, chart height 700px. Built for the Recharts version.
 // @match        https://artificialanalysis.ai/*
 // @run-at       document-idle
 // @grant        none
@@ -13,11 +13,11 @@
 (function () {
   "use strict";
 
-  // -------- 可在这里改默认值 --------
-  const CHART_HEIGHT_PX = 600; // 改成 0 以保留网站默认高度
+  // -------- defaults (edit here) --------
+  const CHART_HEIGHT_PX = 600; // set to 0 to keep the site's default height
   const DEFAULT_RANGE_IDX = 1; // Last 3 months
-  const DEFAULT_Y_MIN = 39; // Y 轴最小值，留空（null）则自动
-  // ---------------------------------
+  const DEFAULT_Y_MIN = 39; // Y-axis minimum; leave null for auto
+  // --------------------------------------
 
   const CHART_HEIGHT = CHART_HEIGHT_PX ? CHART_HEIGHT_PX + "px" : "";
 
