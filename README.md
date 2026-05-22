@@ -2,6 +2,8 @@
 
 A Tampermonkey userscript that injects local controls into the "Frontier Language Model Intelligence" chart on [Artificial Analysis](https://artificialanalysis.ai/), letting you customize the time range, Y-axis minimum, and chart height.
 
+![Screenshot of the chart with injected Range and Y min controls](./imgs/image.png)
+
 ## Features
 
 - **Time range filter**: All time / 12 / 9 / 6 months (defaults to Last 12 months)
