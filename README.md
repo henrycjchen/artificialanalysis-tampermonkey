@@ -14,8 +14,8 @@ A Tampermonkey userscript that injects local controls into the "Frontier Languag
 ## Install
 
 1. Install the [Tampermonkey](https://www.tampermonkey.net/) browser extension
-2. Create a new script and paste in the contents of [`artificialanalysis.js`](./artificialanalysis.js)
-3. Save, then visit https://artificialanalysis.ai/. A `Range` / `Y min` control row appears right under the "Frontier Language Model Intelligence" heading.
+2. Install the script from [GreasyFork](https://greasyfork.org/en/scripts/579264-artificial-analysis-frontier-chart-controls) (one click; you'll also get update notifications) — or create a new script manually and paste in the contents of [`artificialanalysis.js`](./artificialanalysis.js)
+3. Visit https://artificialanalysis.ai/. A `Range` / `Y min` control row appears right under the "Frontier Language Model Intelligence" heading.
 
 ## Customize defaults
 
