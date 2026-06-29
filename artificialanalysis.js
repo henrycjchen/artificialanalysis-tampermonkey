@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Artificial Analysis - Frontier Chart Controls
 // @namespace    https://artificialanalysis.ai/
-// @version      2.3
-// @description  Local controls for the Frontier chart: time range / Y-axis range. Defaults to last 3 months, Y-axis 39~max, chart height 700px. Built for the Recharts version.
+// @version      2.5
+// @description  Local controls for the Frontier chart: time range / Y-axis range. Defaults to last 12 months, Y-axis 33.5~max, chart height 600px. Built for the Recharts (v3) version.
 // @match        https://artificialanalysis.ai/*
 // @run-at       document-idle
 // @grant        none
-// @updateURL    https://raw.githubusercontent.com/henrycjchen/artificialanalysis-tampermonkey/main/artificialanalysis.js
-// @downloadURL  https://raw.githubusercontent.com/henrycjchen/artificialanalysis-tampermonkey/main/artificialanalysis.js
+// @downloadURL https://update.greasyfork.org/scripts/579264/Artificial%20Analysis%20-%20Frontier%20Chart%20Controls.user.js
+// @updateURL https://update.greasyfork.org/scripts/579264/Artificial%20Analysis%20-%20Frontier%20Chart%20Controls.meta.js
 // ==/UserScript==
 
 (function () {
@@ -15,8 +15,8 @@
 
   // -------- defaults (edit here) --------
   const CHART_HEIGHT_PX = 600; // set to 0 to keep the site's default height
-  const DEFAULT_RANGE_IDX = 1; // Last 3 months
-  const DEFAULT_Y_MIN = 39; // Y-axis minimum; leave null for auto
+  const DEFAULT_RANGE_IDX = 1; // Last 12 months
+  const DEFAULT_Y_MIN = 33.5; // Y-axis minimum; leave null for auto
   // --------------------------------------
 
   const CHART_HEIGHT = CHART_HEIGHT_PX ? CHART_HEIGHT_PX + "px" : "";
@@ -33,6 +33,7 @@
 
   // ---- state ----
   let originalCreators = null;
+  let originalChartData = null;
   let rangeDays = RANGES[DEFAULT_RANGE_IDX].days;
   let yMin = DEFAULT_Y_MIN;
   let yMax = null;
@@ -74,6 +75,110 @@
       f = f.return;
     }
     return null;
+  };
+
+  // Recharts (v3) keeps the plotted data in its internal Redux store as a
+  // pivoted array of rows ({ x: <timestamp>, [creatorId]: value, ... }) under
+  // state.chartData.chartData. Dispatching filtered creators into the React
+  // hook only changes how many <Line>s render, not their points, so BOTH the
+  // time range and the Y-axis bound have to be applied by rewriting those store
+  // rows: drop rows outside the time window, and strip any value outside
+  // [yMin, yMax] so points beyond the limit are removed rather than merely
+  // clipped by the axis domain.
+  // Tracks the filter currently pushed into the store so we can tell our own
+  // filtered output apart from the site re-pushing the full dataset.
+  let appliedWindowDays = undefined;
+  let appliedYMin = undefined;
+  let appliedYMax = undefined;
+  let appliedRowCount = -1;
+
+  // True when any current row falls outside the time window or holds a value
+  // outside [min, max] — i.e. the store is holding unfiltered data (the site
+  // re-pushed the full set) and we need to re-apply.
+  const rowsViolate = (rows, cutoff, min, max) => {
+    for (const r of rows) {
+      if (cutoff != null && !(typeof r.x === "number" && r.x >= cutoff))
+        return true;
+      if (min == null && max == null) continue;
+      for (const k in r) {
+        if (k === "x") continue;
+        const v = r[k];
+        if (typeof v !== "number") continue;
+        if (min != null && v < min) return true;
+        if (max != null && v > max) return true;
+      }
+    }
+    return false;
+  };
+
+  // Filter the store's chartData rows to the selected time window and Y range,
+  // then push the result back in. Idempotent: a no-op when the store already
+  // holds exactly the current filter's output.
+  const applyDataFilter = (store) => {
+    if (!store) return;
+    const slice = store.getState() && store.getState().chartData;
+    const rows = slice && Array.isArray(slice.chartData) ? slice.chartData : null;
+    if (!rows || !rows.length) return;
+
+    // Capture the fullest (unfiltered) dataset we have seen as the source of
+    // truth; the site re-pushes the complete set on re-render, our own filtered
+    // output is never larger and so never overwrites it.
+    if (!originalChartData || rows.length > originalChartData.length) {
+      originalChartData = rows;
+    }
+
+    let cutoff = null;
+    if (rangeDays != null) {
+      let maxX = 0;
+      for (const r of originalChartData)
+        if (typeof r.x === "number" && r.x > maxX) maxX = r.x;
+      cutoff = maxX - rangeDays * 24 * 3600 * 1000;
+    }
+    const min = typeof yMin === "number" ? yMin : null;
+    const max = typeof yMax === "number" ? yMax : null;
+
+    // Build the desired rows from the full dataset: drop out-of-window rows and
+    // omit out-of-range values so those points stop rendering.
+    const desired = [];
+    for (const r of originalChartData) {
+      if (cutoff != null && !(typeof r.x === "number" && r.x >= cutoff))
+        continue;
+      if (min == null && max == null) {
+        desired.push(r);
+        continue;
+      }
+      const row = { x: r.x };
+      for (const k in r) {
+        if (k === "x") continue;
+        const v = r[k];
+        if (
+          typeof v === "number" &&
+          ((min != null && v < min) || (max != null && v > max))
+        )
+          continue;
+        row[k] = v;
+      }
+      desired.push(row);
+    }
+
+    // Skip when the store already holds our output: same filter as last applied,
+    // matching row count, and no row/value violating the current limits.
+    const paramsUnchanged =
+      rangeDays === appliedWindowDays &&
+      yMin === appliedYMin &&
+      yMax === appliedYMax;
+    if (
+      paramsUnchanged &&
+      rows.length === appliedRowCount &&
+      !rowsViolate(rows, cutoff, min, max)
+    )
+      return;
+
+    appliedWindowDays = rangeDays;
+    appliedYMin = yMin;
+    appliedYMax = yMax;
+    appliedRowCount = desired.length;
+    store.dispatch({ type: "chartData/setChartData", payload: desired });
   };
 
   // Recharts uses an internal Redux store; we patch its dispatch to inject Y-axis domain.
@@ -131,6 +236,9 @@
     let enforcing = false;
     store.subscribe(() => {
       if (enforcing) return;
+      // Re-apply the filter whenever the site re-pushes the full dataset
+      // (its own re-renders reset chartData back to every row).
+      applyDataFilter(store);
       if (yMin == null && yMax == null) return;
       const state = store.getState();
       const yAxis =
@@ -280,8 +388,8 @@
       let maxMs = 0;
       source.forEach((c) =>
         (c.models || []).forEach((m) => {
-          if (!m.release_date) return;
-          const t = new Date(m.release_date).getTime();
+          if (!m.releaseDate) return;
+          const t = new Date(m.releaseDate).getTime();
           if (t > maxMs) maxMs = t;
         }),
       );
@@ -294,19 +402,19 @@
       ...c,
       models: (c.models || []).filter((m) => {
         if (cutoff != null) {
-          if (!m.release_date) return false;
-          if (new Date(m.release_date).getTime() < cutoff) return false;
+          if (!m.releaseDate) return false;
+          if (new Date(m.releaseDate).getTime() < cutoff) return false;
         }
         if (
           numericMin != null &&
-          (typeof m.intelligence_index !== "number" ||
-            m.intelligence_index < numericMin)
+          (typeof m.intelligenceIndex !== "number" ||
+            m.intelligenceIndex < numericMin)
         )
           return false;
         if (
           numericMax != null &&
-          (typeof m.intelligence_index !== "number" ||
-            m.intelligence_index > numericMax)
+          (typeof m.intelligenceIndex !== "number" ||
+            m.intelligenceIndex > numericMax)
         )
           return false;
         return true;
@@ -356,6 +464,7 @@
     if (!store) return false;
     chartStore = store;
     patchReduxStore(store); // idempotent per-store
+    applyDataFilter(store);
 
     applyHeight(svg);
 
@@ -381,6 +490,7 @@
         if (!cur) return;
         chartStore = cur;
         patchReduxStore(cur);
+        applyDataFilter(cur);
         reapplyYAxisDomain();
         applyHeight(s);
       };
